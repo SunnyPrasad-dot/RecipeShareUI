@@ -9,58 +9,21 @@ import {
   comments,
   mealPlans,
   mealPlanItems,
-  type User,
-  type Category,
-  type Tag,
-  type Recipe,
-  type Favorite,
-  type Rating,
-  type Comment,
-  type MealPlan,
-  type MealPlanItem,
-} from "@shared/schema";
-import { db } from "./db";
+} from "@shared/schema.js";
+import { db } from "./db.js";
 import { eq, and, desc, sql, ilike, or, inArray } from "drizzle-orm";
 
-export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  upsertUser(userData: Partial<User> & { id: string }): Promise<User>;
-  updateUserProfile(userId: string, data: Partial<User>): Promise<User | undefined>;
-  getCategories(): Promise<Category[]>;
-  getTags(): Promise<Tag[]>;
-  getRecipes(filters?: any): Promise<any[]>;
-  getRecipeById(id: number): Promise<any>;
-  getRecipesByAuthor(authorId: string): Promise<any[]>;
-  getFeaturedRecipes(): Promise<any[]>;
-  getRecentRecipes(): Promise<any[]>;
-  createRecipe(data: any): Promise<Recipe>;
-  updateRecipe(id: number, data: any): Promise<Recipe | undefined>;
-  deleteRecipe(id: number): Promise<void>;
-  getFavorites(userId: string): Promise<Favorite[]>;
-  getFavoriteRecipes(userId: string): Promise<any[]>;
-  addFavorite(userId: string, recipeId: number): Promise<Favorite>;
-  removeFavorite(userId: string, recipeId: number): Promise<void>;
-  getRatings(recipeId: number): Promise<Rating[]>;
-  getAverageRating(recipeId: number): Promise<{ average: number; count: number }>;
-  addOrUpdateRating(userId: string, recipeId: number, score: number): Promise<Rating>;
-  getComments(recipeId: number): Promise<any[]>;
-  addComment(userId: string, recipeId: number, content: string): Promise<any>;
-  getMealPlan(userId: string, weekStart: string): Promise<any>;
-  addMealPlanItem(userId: string, weekStart: string, recipeId: number, dayOfWeek: number, mealType: string): Promise<any>;
-  removeMealPlanItem(itemId: number): Promise<void>;
-  getUserStats(userId: string): Promise<{ recipeCount: number; favoriteCount: number; mealPlanCount: number }>;
-}
-
-export class DatabaseStorage implements IStorage {
-  async getUser(id: string): Promise<User | undefined> {
+export class DatabaseStorage {
+  // User operations
+  async getUser(id) {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
 
-  async upsertUser(userData: Partial<User> & { id: string }): Promise<User> {
+  async upsertUser(userData) {
     const [user] = await db
       .insert(users)
-      .values(userData as any)
+      .values(userData)
       .onConflictDoUpdate({
         target: users.id,
         set: {
@@ -72,7 +35,7 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async updateUserProfile(userId: string, data: Partial<User>): Promise<User | undefined> {
+  async updateUserProfile(userId, data) {
     const [user] = await db
       .update(users)
       .set({ ...data, updatedAt: new Date() })
@@ -81,66 +44,38 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async getCategories(): Promise<Category[]> {
+  // Category operations
+  async getCategories() {
     return await db.select().from(categories);
   }
 
-  async getCategoryBySlug(slug: string): Promise<Category | undefined> {
+  async getCategoryBySlug(slug) {
     const [category] = await db.select().from(categories).where(eq(categories.slug, slug));
     return category;
   }
 
-  async getCategoryById(id: number): Promise<Category | undefined> {
-    const [category] = await db.select().from(categories).where(eq(categories.id, id));
+  async createCategory(data) {
+    const [category] = await db.insert(categories).values(data).returning();
     return category;
   }
 
-  async getTags(): Promise<Tag[]> {
+  // Tag operations
+  async getTags() {
     return await db.select().from(tags);
   }
 
-  async getRecipeTags(recipeId: number): Promise<Tag[]> {
-    const result = await db
-      .select({ tag: tags })
-      .from(recipeTags)
-      .innerJoin(tags, eq(recipeTags.tagId, tags.id))
-      .where(eq(recipeTags.recipeId, recipeId));
-    
-    return result.map((r) => r.tag);
+  async getTagBySlug(slug) {
+    const [tag] = await db.select().from(tags).where(eq(tags.slug, slug));
+    return tag;
   }
 
-  async getAverageRating(recipeId: number): Promise<{ average: number; count: number }> {
-    const result = await db
-      .select({ 
-        average: sql<string>`COALESCE(AVG(${ratings.score}), 0)`,
-        count: sql<string>`COUNT(${ratings.id})`
-      })
-      .from(ratings)
-      .where(eq(ratings.recipeId, recipeId));
-    
-    return {
-      average: parseFloat(result[0]?.average || "0"),
-      count: parseInt(result[0]?.count || "0"),
-    };
+  async createTag(data) {
+    const [tag] = await db.insert(tags).values(data).returning();
+    return tag;
   }
 
-  async enrichRecipe(recipe: Recipe): Promise<any> {
-    const author = recipe.authorId ? await this.getUser(recipe.authorId) : null;
-    const category = recipe.categoryId ? await this.getCategoryById(recipe.categoryId) : null;
-    const recipeTags = await this.getRecipeTags(recipe.id);
-    const avgRating = await this.getAverageRating(recipe.id);
-    
-    return {
-      ...recipe,
-      author,
-      category,
-      tags: recipeTags,
-      averageRating: avgRating.average,
-      ratingCount: avgRating.count,
-    };
-  }
-
-  async getRecipes(filters: any = {}): Promise<any[]> {
+  // Recipe operations
+  async getRecipes(filters = {}) {
     let query = db.select().from(recipes).where(eq(recipes.isPublished, true));
     
     if (filters.search) {
@@ -152,39 +87,90 @@ export class DatabaseStorage implements IStorage {
             ilike(recipes.description, `%${filters.search}%`)
           )
         )
-      ) as any;
+      );
     }
 
     if (filters.categoryId) {
-      query = query.where(eq(recipes.categoryId, filters.categoryId)) as any;
+      query = query.where(eq(recipes.categoryId, filters.categoryId));
     }
 
     if (filters.difficulty) {
-      query = query.where(eq(recipes.difficulty, filters.difficulty)) as any;
+      query = query.where(eq(recipes.difficulty, filters.difficulty));
     }
 
     const result = await query.orderBy(desc(recipes.createdAt));
     
-    return await Promise.all(result.map(recipe => this.enrichRecipe(recipe)));
+    // Enrich with author, category, and tags
+    const enrichedRecipes = await Promise.all(
+      result.map(async (recipe) => {
+        const author = recipe.authorId ? await this.getUser(recipe.authorId) : null;
+        const category = recipe.categoryId ? await this.getCategoryById(recipe.categoryId) : null;
+        const recipeTags = await this.getRecipeTags(recipe.id);
+        const avgRating = await this.getAverageRating(recipe.id);
+        
+        return {
+          ...recipe,
+          author,
+          category,
+          tags: recipeTags,
+          averageRating: avgRating.average,
+          ratingCount: avgRating.count,
+        };
+      })
+    );
+
+    return enrichedRecipes;
   }
 
-  async getRecipeById(id: number): Promise<any> {
+  async getRecipeById(id) {
     const [recipe] = await db.select().from(recipes).where(eq(recipes.id, id));
     if (!recipe) return null;
-    return await this.enrichRecipe(recipe);
+
+    const author = recipe.authorId ? await this.getUser(recipe.authorId) : null;
+    const category = recipe.categoryId ? await this.getCategoryById(recipe.categoryId) : null;
+    const recipeTags = await this.getRecipeTags(recipe.id);
+    const avgRating = await this.getAverageRating(recipe.id);
+
+    return {
+      ...recipe,
+      author,
+      category,
+      tags: recipeTags,
+      averageRating: avgRating.average,
+      ratingCount: avgRating.count,
+    };
   }
 
-  async getRecipesByAuthor(authorId: string): Promise<any[]> {
+  async getCategoryById(id) {
+    const [category] = await db.select().from(categories).where(eq(categories.id, id));
+    return category;
+  }
+
+  async getRecipesByAuthor(authorId) {
     const result = await db
       .select()
       .from(recipes)
       .where(eq(recipes.authorId, authorId))
       .orderBy(desc(recipes.createdAt));
 
-    return await Promise.all(result.map(recipe => this.enrichRecipe(recipe)));
+    return Promise.all(
+      result.map(async (recipe) => {
+        const category = recipe.categoryId ? await this.getCategoryById(recipe.categoryId) : null;
+        const recipeTags = await this.getRecipeTags(recipe.id);
+        const avgRating = await this.getAverageRating(recipe.id);
+        
+        return {
+          ...recipe,
+          category,
+          tags: recipeTags,
+          averageRating: avgRating.average,
+          ratingCount: avgRating.count,
+        };
+      })
+    );
   }
 
-  async getFeaturedRecipes(): Promise<any[]> {
+  async getFeaturedRecipes() {
     const result = await db
       .select()
       .from(recipes)
@@ -192,10 +178,26 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(recipes.viewCount))
       .limit(8);
 
-    return await Promise.all(result.map(recipe => this.enrichRecipe(recipe)));
+    return Promise.all(
+      result.map(async (recipe) => {
+        const author = recipe.authorId ? await this.getUser(recipe.authorId) : null;
+        const category = recipe.categoryId ? await this.getCategoryById(recipe.categoryId) : null;
+        const recipeTags = await this.getRecipeTags(recipe.id);
+        const avgRating = await this.getAverageRating(recipe.id);
+        
+        return {
+          ...recipe,
+          author,
+          category,
+          tags: recipeTags,
+          averageRating: avgRating.average,
+          ratingCount: avgRating.count,
+        };
+      })
+    );
   }
 
-  async getRecentRecipes(): Promise<any[]> {
+  async getRecentRecipes() {
     const result = await db
       .select()
       .from(recipes)
@@ -203,16 +205,32 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(recipes.createdAt))
       .limit(8);
 
-    return await Promise.all(result.map(recipe => this.enrichRecipe(recipe)));
+    return Promise.all(
+      result.map(async (recipe) => {
+        const author = recipe.authorId ? await this.getUser(recipe.authorId) : null;
+        const category = recipe.categoryId ? await this.getCategoryById(recipe.categoryId) : null;
+        const recipeTags = await this.getRecipeTags(recipe.id);
+        const avgRating = await this.getAverageRating(recipe.id);
+        
+        return {
+          ...recipe,
+          author,
+          category,
+          tags: recipeTags,
+          averageRating: avgRating.average,
+          ratingCount: avgRating.count,
+        };
+      })
+    );
   }
 
-  async createRecipe(data: any): Promise<Recipe> {
+  async createRecipe(data) {
     const { tagIds, ...recipeData } = data;
     const [recipe] = await db.insert(recipes).values(recipeData).returning();
     
     if (tagIds && tagIds.length > 0) {
       await Promise.all(
-        tagIds.map((tagId: number) =>
+        tagIds.map((tagId) =>
           db.insert(recipeTags).values({ recipeId: recipe.id, tagId })
         )
       );
@@ -221,7 +239,7 @@ export class DatabaseStorage implements IStorage {
     return recipe;
   }
 
-  async updateRecipe(id: number, data: any): Promise<Recipe | undefined> {
+  async updateRecipe(id, data) {
     const { tagIds, ...recipeData } = data;
     const [recipe] = await db
       .update(recipes)
@@ -230,11 +248,13 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     if (tagIds !== undefined) {
+      // Remove existing tags
       await db.delete(recipeTags).where(eq(recipeTags.recipeId, id));
       
+      // Add new tags
       if (tagIds.length > 0) {
         await Promise.all(
-          tagIds.map((tagId: number) =>
+          tagIds.map((tagId) =>
             db.insert(recipeTags).values({ recipeId: id, tagId })
           )
         );
@@ -244,7 +264,7 @@ export class DatabaseStorage implements IStorage {
     return recipe;
   }
 
-  async deleteRecipe(id: number): Promise<void> {
+  async deleteRecipe(id) {
     await db.delete(recipeTags).where(eq(recipeTags.recipeId, id));
     await db.delete(favorites).where(eq(favorites.recipeId, id));
     await db.delete(ratings).where(eq(ratings.recipeId, id));
@@ -253,14 +273,25 @@ export class DatabaseStorage implements IStorage {
     await db.delete(recipes).where(eq(recipes.id, id));
   }
 
-  async incrementViewCount(id: number): Promise<void> {
+  async incrementViewCount(id) {
     await db
       .update(recipes)
       .set({ viewCount: sql`${recipes.viewCount} + 1` })
       .where(eq(recipes.id, id));
   }
 
-  async getFavorites(userId: string): Promise<Favorite[]> {
+  async getRecipeTags(recipeId) {
+    const result = await db
+      .select({ tag: tags })
+      .from(recipeTags)
+      .innerJoin(tags, eq(recipeTags.tagId, tags.id))
+      .where(eq(recipeTags.recipeId, recipeId));
+    
+    return result.map((r) => r.tag);
+  }
+
+  // Favorite operations
+  async getFavorites(userId) {
     return await db
       .select()
       .from(favorites)
@@ -268,7 +299,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(favorites.createdAt));
   }
 
-  async getFavoriteRecipes(userId: string): Promise<any[]> {
+  async getFavoriteRecipes(userId) {
     const userFavorites = await this.getFavorites(userId);
     const recipeIds = userFavorites.map((f) => f.recipeId);
     
@@ -279,10 +310,26 @@ export class DatabaseStorage implements IStorage {
       .from(recipes)
       .where(inArray(recipes.id, recipeIds));
 
-    return await Promise.all(result.map(recipe => this.enrichRecipe(recipe)));
+    return Promise.all(
+      result.map(async (recipe) => {
+        const author = recipe.authorId ? await this.getUser(recipe.authorId) : null;
+        const category = recipe.categoryId ? await this.getCategoryById(recipe.categoryId) : null;
+        const recipeTags = await this.getRecipeTags(recipe.id);
+        const avgRating = await this.getAverageRating(recipe.id);
+        
+        return {
+          ...recipe,
+          author,
+          category,
+          tags: recipeTags,
+          averageRating: avgRating.average,
+          ratingCount: avgRating.count,
+        };
+      })
+    );
   }
 
-  async addFavorite(userId: string, recipeId: number): Promise<Favorite> {
+  async addFavorite(userId, recipeId) {
     const [favorite] = await db
       .insert(favorites)
       .values({ userId, recipeId })
@@ -290,20 +337,44 @@ export class DatabaseStorage implements IStorage {
     return favorite;
   }
 
-  async removeFavorite(userId: string, recipeId: number): Promise<void> {
+  async removeFavorite(userId, recipeId) {
     await db
       .delete(favorites)
       .where(and(eq(favorites.userId, userId), eq(favorites.recipeId, recipeId)));
   }
 
-  async getRatings(recipeId: number): Promise<Rating[]> {
+  async isFavorite(userId, recipeId) {
+    const [result] = await db
+      .select()
+      .from(favorites)
+      .where(and(eq(favorites.userId, userId), eq(favorites.recipeId, recipeId)));
+    return !!result;
+  }
+
+  // Rating operations
+  async getRatings(recipeId) {
     return await db
       .select()
       .from(ratings)
       .where(eq(ratings.recipeId, recipeId));
   }
 
-  async addOrUpdateRating(userId: string, recipeId: number, score: number): Promise<Rating> {
+  async getAverageRating(recipeId) {
+    const result = await db
+      .select({ 
+        average: sql`COALESCE(AVG(${ratings.score}), 0)`,
+        count: sql`COUNT(${ratings.id})`
+      })
+      .from(ratings)
+      .where(eq(ratings.recipeId, recipeId));
+    
+    return {
+      average: parseFloat(result[0]?.average || 0),
+      count: parseInt(result[0]?.count || 0),
+    };
+  }
+
+  async addOrUpdateRating(userId, recipeId, score) {
     const existing = await db
       .select()
       .from(ratings)
@@ -325,14 +396,15 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getComments(recipeId: number): Promise<any[]> {
+  // Comment operations
+  async getComments(recipeId) {
     const result = await db
       .select()
       .from(comments)
       .where(eq(comments.recipeId, recipeId))
       .orderBy(desc(comments.createdAt));
 
-    return await Promise.all(
+    return Promise.all(
       result.map(async (comment) => {
         const user = await this.getUser(comment.userId);
         return { ...comment, user };
@@ -340,7 +412,7 @@ export class DatabaseStorage implements IStorage {
     );
   }
 
-  async addComment(userId: string, recipeId: number, content: string): Promise<any> {
+  async addComment(userId, recipeId, content) {
     const [comment] = await db
       .insert(comments)
       .values({ userId, recipeId, content })
@@ -350,7 +422,14 @@ export class DatabaseStorage implements IStorage {
     return { ...comment, user };
   }
 
-  async getMealPlan(userId: string, weekStart: string): Promise<any> {
+  async deleteComment(id, userId) {
+    await db
+      .delete(comments)
+      .where(and(eq(comments.id, id), eq(comments.userId, userId)));
+  }
+
+  // Meal Plan operations
+  async getMealPlan(userId, weekStart) {
     const weekDate = new Date(weekStart);
     weekDate.setHours(0, 0, 0, 0);
     
@@ -386,7 +465,7 @@ export class DatabaseStorage implements IStorage {
     return { ...plan, items: enrichedItems };
   }
 
-  async addMealPlanItem(userId: string, weekStart: string, recipeId: number, dayOfWeek: number, mealType: string): Promise<any> {
+  async addMealPlanItem(userId, weekStart, recipeId, dayOfWeek, mealType) {
     const plan = await this.getMealPlan(userId, weekStart);
     
     const [item] = await db
@@ -398,30 +477,31 @@ export class DatabaseStorage implements IStorage {
     return { ...item, recipe };
   }
 
-  async removeMealPlanItem(itemId: number): Promise<void> {
+  async removeMealPlanItem(itemId) {
     await db.delete(mealPlanItems).where(eq(mealPlanItems.id, itemId));
   }
 
-  async getUserStats(userId: string): Promise<{ recipeCount: number; favoriteCount: number; mealPlanCount: number }> {
+  // Stats
+  async getUserStats(userId) {
     const recipeCountResult = await db
-      .select({ count: sql<string>`COUNT(*)` })
+      .select({ count: sql`COUNT(*)` })
       .from(recipes)
       .where(eq(recipes.authorId, userId));
 
     const favoriteCountResult = await db
-      .select({ count: sql<string>`COUNT(*)` })
+      .select({ count: sql`COUNT(*)` })
       .from(favorites)
       .where(eq(favorites.userId, userId));
 
     const mealPlanCountResult = await db
-      .select({ count: sql<string>`COUNT(*)` })
+      .select({ count: sql`COUNT(*)` })
       .from(mealPlans)
       .where(eq(mealPlans.userId, userId));
 
     return {
-      recipeCount: parseInt(recipeCountResult[0]?.count || "0"),
-      favoriteCount: parseInt(favoriteCountResult[0]?.count || "0"),
-      mealPlanCount: parseInt(mealPlanCountResult[0]?.count || "0"),
+      recipeCount: parseInt(recipeCountResult[0]?.count || 0),
+      favoriteCount: parseInt(favoriteCountResult[0]?.count || 0),
+      mealPlanCount: parseInt(mealPlanCountResult[0]?.count || 0),
     };
   }
 }

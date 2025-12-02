@@ -194,15 +194,3 @@ export const insertRatingSchema = createInsertSchema(ratings).omit({ id: true, c
 export const insertCommentSchema = createInsertSchema(comments).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertMealPlanSchema = createInsertSchema(mealPlans).omit({ id: true, createdAt: true });
 export const insertMealPlanItemSchema = createInsertSchema(mealPlanItems).omit({ id: true });
-
-// Types
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
-export type Category = typeof categories.$inferSelect;
-export type Tag = typeof tags.$inferSelect;
-export type Recipe = typeof recipes.$inferSelect;
-export type Favorite = typeof favorites.$inferSelect;
-export type Rating = typeof ratings.$inferSelect;
-export type Comment = typeof comments.$inferSelect;
-export type MealPlan = typeof mealPlans.$inferSelect;
-export type MealPlanItem = typeof mealPlanItems.$inferSelect;

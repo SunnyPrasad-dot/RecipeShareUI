@@ -1,16 +1,13 @@
-import type { Express } from "express";
-import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { createServer } from "http";
+import { storage } from "./storage.js";
+import { setupAuth, isAuthenticated } from "./replitAuth.js";
 
-export async function registerRoutes(
-  httpServer: Server,
-  app: Express
-): Promise<Server> {
+export async function registerRoutes(httpServer, app) {
+  // Setup authentication
   await setupAuth(app);
 
   // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  app.get('/api/auth/user', isAuthenticated, async (req, res) => {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
@@ -50,7 +47,7 @@ export async function registerRoutes(
       
       let categoryId;
       if (category) {
-        const cat = await (storage as any).getCategoryBySlug(category as string);
+        const cat = await storage.getCategoryBySlug(category);
         categoryId = cat?.id;
       }
 
@@ -60,6 +57,7 @@ export async function registerRoutes(
         difficulty,
       });
 
+      // Sort recipes
       let sortedRecipes = [...recipes];
       if (sort === 'popular') {
         sortedRecipes.sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0));
@@ -100,7 +98,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get('/api/recipes/my', isAuthenticated, async (req: any, res) => {
+  app.get('/api/recipes/my', isAuthenticated, async (req, res) => {
     try {
       const userId = req.user.claims.sub;
       const recipes = await storage.getRecipesByAuthor(userId);
@@ -118,7 +116,8 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Recipe not found" });
       }
       
-      await (storage as any).incrementViewCount(recipe.id);
+      // Increment view count
+      await storage.incrementViewCount(recipe.id);
       
       res.json(recipe);
     } catch (error) {
@@ -127,7 +126,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post('/api/recipes', isAuthenticated, async (req: any, res) => {
+  app.post('/api/recipes', isAuthenticated, async (req, res) => {
     try {
       const userId = req.user.claims.sub;
       const recipe = await storage.createRecipe({
@@ -141,7 +140,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch('/api/recipes/:id', isAuthenticated, async (req: any, res) => {
+  app.patch('/api/recipes/:id', isAuthenticated, async (req, res) => {
     try {
       const userId = req.user.claims.sub;
       const recipeId = parseInt(req.params.id);
@@ -163,7 +162,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete('/api/recipes/:id', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/recipes/:id', isAuthenticated, async (req, res) => {
     try {
       const userId = req.user.claims.sub;
       const recipeId = parseInt(req.params.id);
@@ -196,7 +195,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post('/api/recipes/:id/comments', isAuthenticated, async (req: any, res) => {
+  app.post('/api/recipes/:id/comments', isAuthenticated, async (req, res) => {
     try {
       const userId = req.user.claims.sub;
       const recipeId = parseInt(req.params.id);
@@ -221,7 +220,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post('/api/recipes/:id/ratings', isAuthenticated, async (req: any, res) => {
+  app.post('/api/recipes/:id/ratings', isAuthenticated, async (req, res) => {
     try {
       const userId = req.user.claims.sub;
       const recipeId = parseInt(req.params.id);
@@ -236,7 +235,7 @@ export async function registerRoutes(
   });
 
   // Favorites
-  app.get('/api/favorites', isAuthenticated, async (req: any, res) => {
+  app.get('/api/favorites', isAuthenticated, async (req, res) => {
     try {
       const userId = req.user.claims.sub;
       const favorites = await storage.getFavorites(userId);
@@ -247,7 +246,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get('/api/favorites/recipes', isAuthenticated, async (req: any, res) => {
+  app.get('/api/favorites/recipes', isAuthenticated, async (req, res) => {
     try {
       const userId = req.user.claims.sub;
       const recipes = await storage.getFavoriteRecipes(userId);
@@ -258,7 +257,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post('/api/favorites', isAuthenticated, async (req: any, res) => {
+  app.post('/api/favorites', isAuthenticated, async (req, res) => {
     try {
       const userId = req.user.claims.sub;
       const { recipeId } = req.body;
@@ -271,7 +270,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete('/api/favorites/:recipeId', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/favorites/:recipeId', isAuthenticated, async (req, res) => {
     try {
       const userId = req.user.claims.sub;
       const recipeId = parseInt(req.params.recipeId);
@@ -285,7 +284,7 @@ export async function registerRoutes(
   });
 
   // Meal Plans
-  app.get('/api/meal-plans', isAuthenticated, async (req: any, res) => {
+  app.get('/api/meal-plans', isAuthenticated, async (req, res) => {
     try {
       const userId = req.user.claims.sub;
       const { weekStart } = req.query;
@@ -294,7 +293,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "weekStart is required" });
       }
       
-      const mealPlan = await storage.getMealPlan(userId, weekStart as string);
+      const mealPlan = await storage.getMealPlan(userId, weekStart);
       res.json(mealPlan);
     } catch (error) {
       console.error("Error fetching meal plan:", error);
@@ -302,7 +301,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post('/api/meal-plans/items', isAuthenticated, async (req: any, res) => {
+  app.post('/api/meal-plans/items', isAuthenticated, async (req, res) => {
     try {
       const userId = req.user.claims.sub;
       const { weekStart, recipeId, dayOfWeek, mealType } = req.body;
@@ -315,7 +314,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete('/api/meal-plans/items/:itemId', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/meal-plans/items/:itemId', isAuthenticated, async (req, res) => {
     try {
       const itemId = parseInt(req.params.itemId);
       await storage.removeMealPlanItem(itemId);
@@ -327,7 +326,7 @@ export async function registerRoutes(
   });
 
   // User profile
-  app.patch('/api/users/profile', isAuthenticated, async (req: any, res) => {
+  app.patch('/api/users/profile', isAuthenticated, async (req, res) => {
     try {
       const userId = req.user.claims.sub;
       const { bio } = req.body;
@@ -340,7 +339,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get('/api/users/stats', isAuthenticated, async (req: any, res) => {
+  app.get('/api/users/stats', isAuthenticated, async (req, res) => {
     try {
       const userId = req.user.claims.sub;
       const stats = await storage.getUserStats(userId);
