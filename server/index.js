@@ -43,8 +43,7 @@ app.use((req, res, next) => {
   });
   next();
 });
-(async () => {
-  const isProduction = process.env.NODE_ENV === "production";
+async function createApp({ isProduction = process.env.NODE_ENV === "production", includeStatic = isProduction } = {}) {
   if (process.env.DATABASE_URL) {
     const { registerRoutes } = await import("./routes.js");
     await registerRoutes(httpServer, app);
@@ -58,12 +57,18 @@ app.use((req, res, next) => {
     res.status(status).json({ message });
     throw err;
   });
-  if (isProduction) {
+  if (includeStatic) {
     serveStatic(app);
-  } else {
+  } else if (!isProduction) {
     const { setupVite } = await import("./vite.js");
     await setupVite(httpServer, app);
   }
+  return app;
+}
+
+async function startServer() {
+  const isProduction = process.env.NODE_ENV === "production";
+  await createApp({ isProduction });
   const port = parseInt(process.env.PORT || "5000", 10);
   let activePort = null;
   const listen = (listenPort) => {
@@ -89,7 +94,10 @@ app.use((req, res, next) => {
     );
   };
   listen(port);
-})();
+}
+
 export {
-  log
+  createApp,
+  log,
+  startServer
 };
