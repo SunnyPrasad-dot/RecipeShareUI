@@ -66,14 +66,31 @@ export default function Recipes() {
 
   const toggleFavoriteMutation = useMutation({
     mutationFn: async (recipeId) => {
+      if (!isAuthenticated) {
+        setLocation("/login");
+        return;
+      }
+      const isAdding = !favoriteIds.has(recipeId);
       if (favoriteIds.has(recipeId)) {
         await apiRequest("DELETE", `/api/favorites/${recipeId}`);
       } else {
         await apiRequest("POST", "/api/favorites", { recipeId });
       }
+      return { recipeId, isAdding };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/favorites"] });
+    onSuccess: (result) => {
+      if (!result) return;
+      queryClient.setQueryData(["/api/favorites"], (current = []) => {
+        if (result.isAdding) {
+          return [...current, { id: Date.now(), userId: "demo-user", recipeId: result.recipeId }];
+        }
+        return current.filter((favorite) => favorite.recipeId !== result.recipeId);
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/favorites/recipes"] });
+      toast({
+        title: "Favorites updated",
+        description: result.isAdding ? "Recipe added to your favorites." : "Recipe removed from your favorites.",
+      });
     },
     onError: () => {
       toast({
@@ -298,7 +315,7 @@ export default function Recipes() {
                     key={recipe.id}
                     recipe={recipe}
                     isFavorite={favoriteIds.has(recipe.id)}
-                    onToggleFavorite={isAuthenticated ? (id) => toggleFavoriteMutation.mutate(id) : undefined}
+                    onToggleFavorite={(id) => toggleFavoriteMutation.mutate(id)}
                   />
                 ))}
               </div>

@@ -21,7 +21,22 @@ export async function apiRequest(method, url, data) {
 
 export const getQueryFn = ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/"), {
+    const [path, ...parts] = queryKey;
+    const url = new URL(String(path), window.location.origin);
+
+    parts.forEach((part) => {
+      if (part && typeof part === "object" && !Array.isArray(part)) {
+        Object.entries(part).forEach(([key, value]) => {
+          if (value !== undefined && value !== "") {
+            url.searchParams.set(key, String(value));
+          }
+        });
+      } else if (part !== undefined) {
+        url.pathname = `${url.pathname}/${part}`;
+      }
+    });
+
+    const res = await fetch(url, {
       credentials: "include",
     });
 

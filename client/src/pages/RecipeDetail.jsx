@@ -478,7 +478,7 @@ export default function RecipeDetail() {
             )}
             {!isAuthenticated && (
               <span className="text-sm text-muted-foreground">
-                <a href="/api/login" className="text-primary hover:underline">Log in</a> to rate
+                <a href="/login" className="text-primary hover:underline">Log in</a> to rate
               </span>
             )}
           </div>

@@ -20,8 +20,6 @@ function log(message, source = "express") {
   });
   console.log(`${formattedTime} [${source}] ${message}`);
 }
-const shouldLogApiRequests = process.env.SHOW_API_LOGS === "true";
-
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -33,7 +31,7 @@ app.use((req, res, next) => {
   };
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (shouldLogApiRequests && path.startsWith("/api")) {
+    if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
@@ -45,7 +43,7 @@ app.use((req, res, next) => {
 });
 (async () => {
   const isProduction = process.env.NODE_ENV === "production";
-  if (process.env.DATABASE_URL) {
+  if (process.env.DATABASE_URL || isProduction) {
     const { registerRoutes } = await import("./routes.js");
     await registerRoutes(httpServer, app);
   } else {
@@ -65,7 +63,6 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
   const port = parseInt(process.env.PORT || "5000", 10);
-  let activePort = null;
   const listen = (listenPort) => {
     httpServer.once("error", (error) => {
       if (error.code === "EADDRINUSE" && !isProduction) {
@@ -81,10 +78,7 @@ app.use((req, res, next) => {
         host: "0.0.0.0"
       },
       () => {
-        if (activePort === null) {
-          activePort = listenPort;
-          log(`serving on http://localhost:${listenPort}`);
-        }
+        log(`serving on port ${listenPort}`);
       }
     );
   };

@@ -9,7 +9,7 @@ import {
   comments,
   mealPlans,
   mealPlanItems
-} from "../shared/schema.js";
+} from "@shared/schema";
 import { db } from "./db.js";
 import { eq, and, desc, sql, ilike, or, inArray } from "drizzle-orm";
 class DatabaseStorage {

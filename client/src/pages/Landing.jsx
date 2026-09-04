@@ -102,7 +102,7 @@ export default function Landing() {
             </form>
             
             <div className="flex flex-wrap items-center justify-center gap-4">
-              <a href="/api/login">
+              <a href="/login">
                 <Button size="lg" className="gap-2" data-testid="button-get-started">
                   Get Started Free
                   <ArrowRight className="h-4 w-4" />
@@ -188,7 +188,7 @@ export default function Landing() {
             <p className="mb-8 text-muted-foreground">
               Join RecipeShare today and become part of our growing community of food lovers.
             </p>
-            <a href="/api/login">
+            <a href="/login">
               <Button size="lg" className="gap-2" data-testid="button-join-now">
                 Join Now - It's Free
                 <ArrowRight className="h-4 w-4" />

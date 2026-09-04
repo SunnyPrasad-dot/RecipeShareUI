@@ -14,6 +14,7 @@ import {
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { getInitials } from "@/lib/utils";
+import { queryClient } from "@/lib/queryClient";
 
 export function Header({ onSearch }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -27,6 +28,18 @@ export function Header({ onSearch }) {
       onSearch(searchQuery);
     }
     setLocation(`/recipes?search=${encodeURIComponent(searchQuery)}`);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/logout", { credentials: "include" });
+    } catch (error) {
+      console.warn("Logout request failed", error);
+    }
+
+    queryClient.clear();
+    setLocation("/");
+    window.location.reload();
   };
 
   const navItems = [
@@ -137,17 +150,22 @@ export function Header({ onSearch }) {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <a href="/api/logout" className="flex cursor-pointer items-center gap-2 text-destructive" data-testid="button-logout">
-                      <LogOut className="h-4 w-4" />
-                      Log Out
-                    </a>
+                  <DropdownMenuItem
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      handleLogout();
+                    }}
+                    className="flex cursor-pointer items-center gap-2 text-destructive"
+                    data-testid="button-logout"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Log Out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </>
           ) : (
-            <a href="/api/login">
+            <a href="/login">
               <Button data-testid="button-login">Log In</Button>
             </a>
           )}

@@ -65,7 +65,7 @@ export default function MealPlanner() {
         variant: "destructive",
       });
       setTimeout(() => {
-        window.location.href = "/api/login";
+        window.location.href = "/login";
       }, 500);
     }
   }, [isAuthenticated, authLoading, toast]);
@@ -82,17 +82,39 @@ export default function MealPlanner() {
 
   const addItemMutation = useMutation({
     mutationFn: async ({ recipeId, dayOfWeek, mealType }) => {
-      await apiRequest("POST", "/api/meal-plans/items", {
+      const res = await apiRequest("POST", "/api/meal-plans/items", {
         weekStart,
         recipeId,
         dayOfWeek,
         mealType,
       });
+      return { response: res, recipeId, dayOfWeek, mealType };
     },
-    onSuccess: () => {
+    onSuccess: ({ recipeId, dayOfWeek, mealType }) => {
+      const selectedRecipe = favoriteRecipes?.find((recipe) => recipe.id === recipeId);
+      const dayLabel = DAYS_OF_WEEK[dayOfWeek] || "This day";
+      const recipeLabel = selectedRecipe?.title || "Recipe";
+
+      queryClient.setQueryData(["/api/meal-plans", weekStart], (current = { id: 1, items: [] }) => ({
+        ...current,
+        items: [
+          ...(current.items || []),
+          {
+            id: Date.now(),
+            recipeId,
+            dayOfWeek,
+            mealType,
+            weekStart,
+            recipe: selectedRecipe,
+          },
+        ],
+      }));
       queryClient.invalidateQueries({ queryKey: ["/api/meal-plans"] });
       setIsAddDialogOpen(false);
-      toast({ title: "Recipe added", description: "Recipe added to meal plan" });
+      toast({
+        title: "Recipe added",
+        description: `${recipeLabel} added to ${dayLabel} (${mealType})`,
+      });
     },
   });
 
